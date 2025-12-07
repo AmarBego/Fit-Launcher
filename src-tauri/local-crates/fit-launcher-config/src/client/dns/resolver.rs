@@ -53,9 +53,35 @@ impl Resolve for HickoryResolverWithProtocol {
             let lookup = match resolver.lookup_ip(name.as_str()).await {
                 Ok(ip) => ip,
                 Err(err) => {
-                    eprintln!("Error looking up IPs: {err}");
-                    eprintln!("Name of DNS is {:?}", name.as_str());
-                    return Err(err.into());
+                    tracing::warn!(
+                        "Custom DNS lookup failed for {}: {}. Attempting system fallback...",
+                        name.as_str(),
+                        err
+                    );
+
+                    // Attempt system fallback
+                    // We construct a new system resolver on the fly.
+                    // This incurs a small overhead but ensures we don't hold invalid state and valid only for this request context.
+                    let system_resolver = TokioResolver::tokio_from_system_conf().map_err(|e| {
+                        tracing::error!("Failed to create system resolver for fallback: {}", e);
+                        // If we can't create a system resolver, we use the system error to create an IO error
+                        io::Error::new(io::ErrorKind::Other, e)
+                    })?;
+
+                    match system_resolver.lookup_ip(name.as_str()).await {
+                        Ok(ip) => {
+                            tracing::info!("System fallback successful for {}", name.as_str());
+                            ip
+                        }
+                        Err(sys_err) => {
+                            tracing::error!(
+                                "System fallback also failed for {}: {}",
+                                name.as_str(),
+                                sys_err
+                            );
+                            return Err(err.into());
+                        }
+                    }
                 }
             };
 

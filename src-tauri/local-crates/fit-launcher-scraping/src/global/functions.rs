@@ -76,9 +76,10 @@ pub(crate) async fn fetch_page(url: &str, app: &AppHandle) -> Result<String, Scr
         }
 
         if !resp.status().is_success() {
-            return Err(ScrapingError::HttpStatusCodeError(
-                resp.status().to_string(),
-            ));
+            // Retry on server errors or timeouts (status check failed)
+            warn!("Request failed with status {}, retrying...", resp.status());
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            continue;
         }
 
         return resp

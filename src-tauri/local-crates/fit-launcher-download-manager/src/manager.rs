@@ -130,7 +130,12 @@ impl DownloadManager {
                     for gid in gids {
                         let aria_guard = dm.aria.lock().await;
                         if let Err(e) = aria_guard.pause(&gid).await {
-                            error!("Failed to pause gid {} during load: {:?}", gid, e);
+                            let msg = e.to_string();
+                            if msg.contains("GID") && msg.contains("is not found") {
+                                // This is expected if the aria2 session was restarted
+                            } else {
+                                error!("Failed to pause gid {} during load: {:?}", gid, e);
+                            }
                         }
                         // small yield to avoid hammering aria2 in busy startup scenarios
                         tokio::task::yield_now().await;

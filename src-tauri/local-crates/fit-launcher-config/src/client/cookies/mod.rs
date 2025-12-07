@@ -29,8 +29,11 @@ pub struct Cookies(pub Vec<Cookie>);
 impl Cookies {
     pub fn load_cookies() -> Result<Self, Error> {
         let path = Self::default_path();
-        let raw: Vec<u8> = std::fs::read(path)?;
-        Ok(serde_json::from_slice(&raw)?)
+        match std::fs::read(path) {
+            Ok(raw) => Ok(serde_json::from_slice(&raw)?),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Cookies(Vec::new())),
+            Err(e) => Err(e.into()),
+        }
     }
 
     pub fn default_path() -> PathBuf {
